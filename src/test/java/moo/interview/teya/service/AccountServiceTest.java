@@ -3,8 +3,10 @@ package moo.interview.teya.service;
 import moo.interview.teya.dto.request.CreateAccountRequest;
 import moo.interview.teya.dto.response.AccountResponse;
 import moo.interview.teya.entity.Account;
+import moo.interview.teya.entity.OverdraftPolicy;
 import moo.interview.teya.mapper.AccountMapper;
 import moo.interview.teya.repository.AccountRepository;
+import moo.interview.teya.repository.OverdraftPolicyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,13 +26,15 @@ class AccountServiceTest {
     private AccountRepository accountRepository;
     @Mock
     private AccountMapper accountMapper;
+    @Mock
+    private OverdraftPolicyRepository overdraftPolicyRepository;
 
     private AccountService accountService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        accountService = new AccountService(accountRepository, accountMapper);
+        accountService = new AccountService(accountRepository, overdraftPolicyRepository, accountMapper);
     }
 
     @Test
@@ -63,6 +67,13 @@ class AccountServiceTest {
 
         // Verify accountRepository.save called at least once
         verify(accountRepository, atLeast(1)).save(any());
+
+        ArgumentCaptor<OverdraftPolicy> overdraftCaptor = ArgumentCaptor.forClass(OverdraftPolicy.class);
+        verify(overdraftPolicyRepository).save(overdraftCaptor.capture());
+        OverdraftPolicy savedPolicy = overdraftCaptor.getValue();
+        assertEquals(1L, savedPolicy.getAccountId());
+        assertEquals(false, savedPolicy.getOverdraftAllowed());
+        assertEquals(new BigDecimal("0.000000"), savedPolicy.getOverdraftLimit());
     }
 }
 
