@@ -126,5 +126,126 @@ class MessageQueueServiceTest {
         assertNotNull(msg.getProcessedAtInUTC());
         verify(messageQueueRepository).save(msg);
     }
+
+    @Test
+    void processMessage_withdrawal_withPriorPending_increments_retryCount() {
+        Account acct = Account.builder()
+                .id(10L)
+                .accountNumber("ACC-00000001")
+                .currentBalance(new BigDecimal("500.000000"))
+                .currency("GBP")
+                .createdAtInUTC(Instant.now())
+                .updatedAtInUTC(Instant.now())
+                .build();
+
+        Instant now = Instant.now();
+        // Prior deposit still pending
+        Transaction priorDeposit = Transaction.builder()
+                .id(100L)
+                .accountId(10L)
+                .transactionType(TransactionType.DEPOSIT)
+                .amount(new BigDecimal("100.000000"))
+                .status(TransactionStatus.PENDING)
+                .currency("GBP")
+                .createdAtInUTC(now.minusSeconds(10))
+                .build();
+
+        // Withdrawal created after prior deposit
+        Transaction withdrawal = Transaction.builder()
+                .id(200L)
+                .accountId(10L)
+                .transactionType(TransactionType.WITHDRAWAL)
+                .amount(new BigDecimal("50.000000"))
+                .status(TransactionStatus.PENDING)
+                .currency("GBP")
+                .createdAtInUTC(now)
+                .build();
+
+        MessageQueue msg = MessageQueue.builder()
+                .id(3L)
+                .transactionId(200L)
+                .accountNumber("ACC-00000001")
+                .eventType(EventType.TRANSACTION_COMPLETED)
+                .payload("{}")
+                .processed(false)
+                .retryCount(0)
+                .createdAtInUTC(now)
+                .build();
+
+        when(transactionRepository.findById(200L)).thenReturn(Optional.of(withdrawal));
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(acct));
+        when(transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(10L, TransactionStatus.PENDING))
+                .thenReturn(List.of(priorDeposit, withdrawal));
+        when(messageQueueRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.processMessage(msg);
+
+        // Verify retry count incremented and message NOT marked processed
+        assertEquals(1, msg.getRetryCount());
+        assertFalse(msg.getProcessed());
+        verify(messageQueueRepository).save(msg);
+    }
+
+    @Test
+    void processMessage_withdrawal_onThirdRetry_marksFailed() {
+        Account acct = Account.builder()
+                .id(10L)
+                .accountNumber("ACC-00000001")
+                .currentBalance(new BigDecimal("500.000000"))
+                .currency("GBP")
+                .createdAtInUTC(Instant.now())
+                .updatedAtInUTC(Instant.now())
+                .build();
+
+        Instant now = Instant.now();
+        Transaction priorDeposit = Transaction.builder()
+                .id(100L)
+                .accountId(10L)
+                .transactionType(TransactionType.DEPOSIT)
+                .amount(new BigDecimal("100.000000"))
+                .status(TransactionStatus.PENDING)
+                .currency("GBP")
+                .createdAtInUTC(now.minusSeconds(10))
+                .build();
+
+        Transaction withdrawal = Transaction.builder()
+                .id(200L)
+                .accountId(10L)
+                .transactionType(TransactionType.WITHDRAWAL)
+                .amount(new BigDecimal("50.000000"))
+                .status(TransactionStatus.PENDING)
+                .currency("GBP")
+                .createdAtInUTC(now)
+                .build();
+
+        MessageQueue msg = MessageQueue.builder()
+                .id(4L)
+                .transactionId(200L)
+                .accountNumber("ACC-00000001")
+                .eventType(EventType.TRANSACTION_COMPLETED)
+                .payload("{}")
+                .processed(false)
+                .retryCount(2)
+                .createdAtInUTC(now)
+                .build();
+
+        when(transactionRepository.findById(200L)).thenReturn(Optional.of(withdrawal));
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(acct));
+        when(transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(10L, TransactionStatus.PENDING))
+                .thenReturn(List.of(priorDeposit, withdrawal));
+        when(transactionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(messageQueueRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.processMessage(msg);
+
+        // Verify withdrawal marked as FAILED
+        ArgumentCaptor<Transaction> txCaptor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(txCaptor.capture());
+        assertEquals(TransactionStatus.FAILED, txCaptor.getValue().getStatus());
+
+        // Message marked as processed
+        assertTrue(msg.getProcessed());
+        assertNotNull(msg.getProcessedAtInUTC());
+    }
 }
 

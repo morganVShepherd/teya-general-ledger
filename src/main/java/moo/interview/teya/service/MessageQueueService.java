@@ -27,6 +27,7 @@ import java.util.Optional;
 public class MessageQueueService {
 
     private static final Logger log = LoggerFactory.getLogger(MessageQueueService.class);
+    private static final int MAX_WITHDRAWAL_RETRIES = 3;
 
     private final MessageQueueRepository messageQueueRepository;
     private final TransactionRepository transactionRepository;
@@ -68,6 +69,12 @@ public class MessageQueueService {
 
     @Transactional
     protected void processMessage(MessageQueue msg) {
+        // If retry needed, implement backoff delay at caller level
+        // This method executes single attempt per call from scheduled job
+        processMessageInternal(msg);
+    }
+
+    private void processMessageInternal(MessageQueue msg) {
         Optional<Transaction> txOpt = transactionRepository.findById(msg.getTransactionId());
         if (txOpt.isEmpty()) {
             log.warn("Transaction not found for message id={} txnId={}", msg.getId(), msg.getTransactionId());
@@ -100,6 +107,35 @@ public class MessageQueueService {
         }
 
         Account acct = acctOpt.get();
+
+        // For withdrawals, retry on subsequent scheduler ticks (1s default delay)
+        // while prior transactions are still pending.
+        if (tx.getTransactionType() == TransactionType.WITHDRAWAL) {
+            List<Transaction> allPending = transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(acct.getId(), TransactionStatus.PENDING);
+            // Find all pending transactions BEFORE this one
+            List<Transaction> priorPending = allPending.stream()
+                    .filter(t -> t.getCreatedAtInUTC().isBefore(tx.getCreatedAtInUTC()))
+                    .toList();
+
+            if (!priorPending.isEmpty()) {
+                int nextAttempt = (msg.getRetryCount() == null ? 0 : msg.getRetryCount()) + 1;
+                msg.setRetryCount(nextAttempt);
+
+                if (nextAttempt >= MAX_WITHDRAWAL_RETRIES) {
+                    log.warn("Withdrawal transaction id={} failed: prior transactions still pending after {} retries", tx.getId(), MAX_WITHDRAWAL_RETRIES);
+                    tx.setStatus(TransactionStatus.FAILED);
+                    transactionRepository.save(tx);
+                    msg.setProcessed(true);
+                    msg.setProcessedAtInUTC(Instant.now());
+                    messageQueueRepository.save(msg);
+                    return;
+                } else {
+                    log.debug("Withdrawal transaction id={} waiting for prior transactions, retry={}/{}", tx.getId(), nextAttempt, MAX_WITHDRAWAL_RETRIES);
+                    messageQueueRepository.save(msg);
+                    return;
+                }
+            }
+        }
 
         // Apply transaction to account balance
         BigDecimal current = acct.getCurrentBalance();
