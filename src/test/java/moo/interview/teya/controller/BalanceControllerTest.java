@@ -38,7 +38,7 @@ class BalanceControllerTest {
                 )
         );
 
-        mockMvc.perform(get("/accounts/ACC-00000001/balance"))
+        mockMvc.perform(get("/v1/accounts/ACC-00000001/balance"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.accountNumber").value("ACC-00000001"))

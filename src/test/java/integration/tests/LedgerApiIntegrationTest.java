@@ -43,13 +43,13 @@ class LedgerApiIntegrationTest {
         String accountNumber = createAccountAndGetNumber();
 
         ResponseEntity<String> deposit = postJson(
-                path("/accounts/" + accountNumber + "/transactions/deposit"),
+                path("/v1/accounts/" + accountNumber + "/transactions/deposit"),
                 "{\"amount\":500.00,\"description\":\"Initial funding\"}"
         );
         assertEquals(HttpStatus.CREATED, deposit.getStatusCode());
 
         ResponseEntity<String> invalidWithdrawal = postJson(
-                path("/accounts/" + accountNumber + "/transactions/withdraw"),
+                path("/v1/accounts/" + accountNumber + "/transactions/withdraw"),
                 "{\"amount\":5000.00,\"description\":\"Too much\"}"
         );
         assertEquals(HttpStatus.CONFLICT, invalidWithdrawal.getStatusCode());
@@ -58,7 +58,7 @@ class LedgerApiIntegrationTest {
         assertEquals("INSUFFICIENT_BALANCE", invalidNode.get("errorCode").asText());
 
         ResponseEntity<String> withdrawal = postJson(
-                path("/accounts/" + accountNumber + "/transactions/withdraw"),
+                path("/v1/accounts/" + accountNumber + "/transactions/withdraw"),
                 "{\"amount\":200.00,\"description\":\"Cash out\"}"
         );
         assertEquals(HttpStatus.ACCEPTED, withdrawal.getStatusCode());
@@ -69,7 +69,7 @@ class LedgerApiIntegrationTest {
         assertNotNull(finalBalanceNode.get("lastUpdatedAtInUTC").asText());
 
         ResponseEntity<String> history = restTemplate.getForEntity(
-                path("/accounts/" + accountNumber + "/transactions?pageSize=10"),
+                path("/v1/accounts/" + accountNumber + "/transactions?pageSize=10"),
                 String.class
         );
         assertEquals(HttpStatus.OK, history.getStatusCode());
@@ -82,12 +82,12 @@ class LedgerApiIntegrationTest {
     void history_cursorPagination_returnsNextCursorAndNextPage() throws Exception {
         String accountNumber = createAccountAndGetNumber();
 
-        postJson(path("/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":10.00,\"description\":\"d1\"}");
-        postJson(path("/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":20.00,\"description\":\"d2\"}");
-        postJson(path("/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":30.00,\"description\":\"d3\"}");
+        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":10.00,\"description\":\"d1\"}");
+        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":20.00,\"description\":\"d2\"}");
+        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":30.00,\"description\":\"d3\"}");
 
         ResponseEntity<String> page1 = restTemplate.getForEntity(
-                path("/accounts/" + accountNumber + "/transactions?pageSize=2"),
+                path("/v1/accounts/" + accountNumber + "/transactions?pageSize=2"),
                 String.class
         );
         assertEquals(HttpStatus.OK, page1.getStatusCode());
@@ -100,7 +100,7 @@ class LedgerApiIntegrationTest {
         assertFalse(nextCursor.isBlank());
 
         ResponseEntity<String> page2 = restTemplate.getForEntity(
-                path("/accounts/" + accountNumber + "/transactions?pageSize=2&cursor=" + nextCursor),
+                path("/v1/accounts/" + accountNumber + "/transactions?pageSize=2&cursor=" + nextCursor),
                 String.class
         );
         assertEquals(HttpStatus.OK, page2.getStatusCode());
@@ -114,7 +114,7 @@ class LedgerApiIntegrationTest {
         String accountNumber = createAccountAndGetNumber();
 
         ResponseEntity<String> invalid = restTemplate.getForEntity(
-                path("/accounts/" + accountNumber + "/transactions?pageSize=0"),
+                path("/v1/accounts/" + accountNumber + "/transactions?pageSize=0"),
                 String.class
         );
 
@@ -124,7 +124,7 @@ class LedgerApiIntegrationTest {
     }
 
     private String createAccountAndGetNumber() throws Exception {
-        ResponseEntity<String> createAccount = postJson(path("/accounts"), "{}");
+        ResponseEntity<String> createAccount = postJson(path("/v1/accounts"), "{}");
         assertEquals(HttpStatus.CREATED, createAccount.getStatusCode());
 
         JsonNode node = objectMapper.readTree(createAccount.getBody());
@@ -137,7 +137,7 @@ class LedgerApiIntegrationTest {
         Instant deadline = Instant.now().plus(6, ChronoUnit.SECONDS);
         while (Instant.now().isBefore(deadline)) {
             ResponseEntity<String> response = restTemplate.getForEntity(
-                    path("/accounts/" + accountNumber + "/balance"),
+                    path("/v1/accounts/" + accountNumber + "/balance"),
                     String.class
             );
             if (response.getStatusCode().is2xxSuccessful()) {

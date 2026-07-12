@@ -1,5 +1,6 @@
 package moo.interview.teya.controller;
 
+import moo.interview.teya.controller.constants.ApiPaths;
 import moo.interview.teya.dto.request.DepositRequest;
 import moo.interview.teya.dto.request.WithdrawalRequest;
 import moo.interview.teya.dto.response.TransactionHistoryResponse;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 
 @RestController
-@RequestMapping("/accounts/{accountNumber}/transactions")
+@RequestMapping(ApiPaths.ACCOUNT_TRANSACTIONS)
 public class TransactionController {
 
     private final LedgerService ledgerService;

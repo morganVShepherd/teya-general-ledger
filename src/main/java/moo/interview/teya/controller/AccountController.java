@@ -1,5 +1,6 @@
 package moo.interview.teya.controller;
 
+import moo.interview.teya.controller.constants.ApiPaths;
 import moo.interview.teya.dto.response.AccountResponse;
 import moo.interview.teya.service.AccountService;
 import org.springframework.http.HttpHeaders;
@@ -13,7 +14,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 
 @RestController
-@RequestMapping("/accounts")
+@RequestMapping(ApiPaths.ACCOUNTS)
 public class AccountController {
 
     private final AccountService accountService;

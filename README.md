@@ -123,13 +123,13 @@ If you want code and schema to match exactly (remove the column), update `src/ma
 ## API Endpoints
 
 ### Account Management
-- **Create Account:** `POST /api/accounts`
-- **Get Balance:** `GET /api/accounts/{accountNumber}/balance`
+- **Create Account:** `POST /api/v1/accounts`
+- **Get Balance:** `GET /api/v1/accounts/{accountNumber}/balance`
 
 ### Transactions
-- **Deposit:** `POST /api/accounts/{accountNumber}/transactions/deposit`
-- **Withdraw:** `POST /api/accounts/{accountNumber}/transactions/withdraw`
-- **History:** `GET /api/accounts/{accountNumber}/transactions`
+- **Deposit:** `POST /api/v1/accounts/{accountNumber}/transactions/deposit`
+- **Withdraw:** `POST /api/v1/accounts/{accountNumber}/transactions/withdraw`
+- **History:** `GET /api/v1/accounts/{accountNumber}/transactions`
 
 ## Key Architecture Decisions
 

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,22 +27,19 @@ class AccountServiceTest {
     private AccountMapper accountMapper;
     @Mock
     private OverdraftPolicyRepository overdraftPolicyRepository;
-    @Mock
-    private JdbcTemplate jdbcTemplate;
 
     private AccountService accountService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        accountService = new AccountService(accountRepository, overdraftPolicyRepository, accountMapper, jdbcTemplate);
+        accountService = new AccountService(accountRepository, overdraftPolicyRepository, accountMapper);
     }
 
     @Test
     void createAccount_generatesAccountNumber_andReturnsResponse() {
-        when(jdbcTemplate.queryForObject("SELECT NEXT VALUE FOR account_number_seq", Long.class)).thenReturn(1L);
+        when(accountRepository.getNextAccountNumberValue()).thenReturn(1L);
 
-        // Persisted account gets DB id assigned
         when(accountRepository.save(any())).thenAnswer(invocation -> {
             Account a = invocation.getArgument(0);
             if (a.getId() == null) {
@@ -54,7 +50,7 @@ class AccountServiceTest {
 
         Account saved = new Account();
         saved.setId(1L);
-        saved.setAccountNumber("ACC-00000001");
+        saved.setAccountNumber("ACC-0001");
         saved.setCurrentBalance(new BigDecimal("0.000000"));
         saved.setCurrency("GBP");
         saved.setCreatedAtInUTC(Instant.now());
@@ -67,9 +63,9 @@ class AccountServiceTest {
         AccountResponse resp = accountService.createAccount();
 
         assertNotNull(resp);
-        assertEquals("ACC-00000001", resp.accountNumber());
+        assertEquals("ACC-0001", resp.accountNumber());
 
-        verify(jdbcTemplate).queryForObject("SELECT NEXT VALUE FOR account_number_seq", Long.class);
+        verify(accountRepository).getNextAccountNumberValue();
         verify(accountRepository).save(any());
 
         ArgumentCaptor<OverdraftPolicy> overdraftCaptor = ArgumentCaptor.forClass(OverdraftPolicy.class);

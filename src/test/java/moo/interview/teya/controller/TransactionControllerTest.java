@@ -67,7 +67,7 @@ class TransactionControllerTest {
                 Instant.parse("2026-07-12T23:59:59Z")
         )).thenReturn(response);
 
-        mockMvc.perform(get("/accounts/ACC-00000001/transactions")
+        mockMvc.perform(get("/v1/accounts/ACC-00000001/transactions")
                         .param("pageSize", "20")
                         .param("cursor", "123")
                         .param("fromDate", "2026-07-12T00:00:00Z")

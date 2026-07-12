@@ -3,10 +3,9 @@ package moo.interview.teya.service;
 import moo.interview.teya.dto.response.AccountResponse;
 import moo.interview.teya.entity.Account;
 import moo.interview.teya.entity.OverdraftPolicy;
+import moo.interview.teya.mapper.AccountMapper;
 import moo.interview.teya.repository.AccountRepository;
 import moo.interview.teya.repository.OverdraftPolicyRepository;
-import moo.interview.teya.mapper.AccountMapper;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,23 +19,20 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final OverdraftPolicyRepository overdraftPolicyRepository;
     private final AccountMapper accountMapper;
-    private final JdbcTemplate jdbcTemplate;
 
     public AccountService(AccountRepository accountRepository,
                           OverdraftPolicyRepository overdraftPolicyRepository,
-                          AccountMapper accountMapper,
-                          JdbcTemplate jdbcTemplate) {
+                          AccountMapper accountMapper) {
         this.accountRepository = accountRepository;
         this.overdraftPolicyRepository = overdraftPolicyRepository;
         this.accountMapper = accountMapper;
-        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional
     public AccountResponse createAccount() {
             Instant now = Instant.now();
             Long generatedValue = Objects.requireNonNull(
-                    jdbcTemplate.queryForObject("SELECT NEXT VALUE FOR account_number_seq", Long.class),
+                    accountRepository.getNextAccountNumberValue(),
                     "Failed to generate account number value"
             );
             String accountNumber = String.format("ACC-%04d", generatedValue);
