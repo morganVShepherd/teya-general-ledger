@@ -2,6 +2,229 @@
 
 A Spring Boot-based general ledger system with transaction management, overdraft policies, and message queue processing.
 
+---
+
+## Starting the Application
+
+### Prerequisites
+- Java 17 or higher
+- Maven 3.6 or higher
+
+### 1. Build
+
+```bash
+mvn clean compile
+```
+
+### 2. Run
+
+```bash
+mvn spring-boot:run
+```
+
+The application starts on **`http://localhost:8080`** with context path **`/api`**.
+
+> **Note:** The database is in-memory (H2). All data — including the seed accounts below — is available immediately on startup and is reset each time the app restarts.
+
+### 3. Run Tests
+
+```bash
+mvn test
+```
+
+---
+
+## API Walkthrough (using seed data)
+
+The following accounts are pre-loaded by Liquibase on startup:
+
+| Account Number | Starting Balance | Overdraft Allowed | Overdraft Limit |
+|----------------|-----------------|-------------------|-----------------|
+| `INI-001`      | £10.00          | No                | —               |
+| `INI-002`      | £50.00          | No                | —               |
+| `INI-003`      | £100.00         | Yes               | £500.00         |
+| `INI-004`      | £500.00         | Yes               | £1,000.00       |
+
+Use any HTTP client (Postman, curl, HTTPie, etc.) with `Content-Type: application/json`.
+
+---
+
+### Check an Account Balance
+
+```
+GET http://localhost:8080/api/v1/accounts/INI-003/balance
+```
+
+**Expected response (`200 OK`):**
+```json
+{
+  "accountNumber": "INI-003",
+  "currentBalance": "100.00",
+  "currency": "GBP",
+  "lastUpdatedAtInUTC": "..."
+}
+```
+
+---
+
+### Make a Deposit
+
+```
+POST http://localhost:8080/api/v1/accounts/INI-003/transactions/deposit
+```
+```json
+{
+  "amount": 50.00,
+  "description": "Top up"
+}
+```
+
+**Expected response (`201 Created`):**
+```json
+{
+  "amount": "50.00",
+  "balanceAfter": "150.00",
+  "transactionType": "DEPOSIT",
+  "status": "PENDING",
+  "currency": "GBP",
+  "description": "Top up"
+}
+```
+
+> Withdrawals are processed asynchronously. The status transitions from `PENDING` → `COMPLETED` within ~1 second.
+
+---
+
+### Example 1 — Overdraft Allowed (`INI-003`)
+
+Account `INI-003` starts with **£100.00** and has an overdraft limit of **£500.00**, meaning the balance can go as low as **−£500.00**.
+
+Withdraw **£450.00** (£350.00 beyond the current balance, but within the overdraft limit):
+
+```
+POST http://localhost:8080/api/v1/accounts/INI-003/transactions/withdraw
+```
+```json
+{
+  "amount": 450.00,
+  "description": "Large withdrawal using overdraft"
+}
+```
+
+**Expected response (`202 Accepted`):**
+```json
+{
+  "amount": "450.00",
+  "balanceAfter": "-350.00",
+  "transactionType": "WITHDRAWAL",
+  "status": "PENDING",
+  "currency": "GBP",
+  "description": "Large withdrawal using overdraft"
+}
+```
+
+Poll the balance to confirm it settles at **−£350.00**:
+
+```
+GET http://localhost:8080/api/v1/accounts/INI-003/balance
+```
+
+**Expected response (after ~1 second):**
+```json
+{
+  "accountNumber": "INI-003",
+  "currentBalance": "-350.00",
+  "currency": "GBP",
+  "lastUpdatedAtInUTC": "..."
+}
+```
+
+---
+
+### Example 2 — Overdraft Denied (`INI-001`)
+
+Account `INI-001` starts with **£10.00** and has **no overdraft**. Any withdrawal exceeding the balance is rejected immediately.
+
+Attempt to withdraw **£50.00** (exceeds the £10.00 balance):
+
+```
+POST http://localhost:8080/api/v1/accounts/INI-001/transactions/withdraw
+```
+```json
+{
+  "amount": 50.00,
+  "description": "Withdrawal that exceeds balance"
+}
+```
+
+**Expected response (`409 Conflict`):**
+```json
+{
+  "errorCode": "INSUFFICIENT_BALANCE",
+  "message": "Insufficient balance for this transaction"
+}
+```
+
+The account balance remains unchanged at **£10.00**.
+
+---
+
+### View Transaction History
+
+```
+GET http://localhost:8080/api/v1/accounts/INI-003/transactions?pageSize=10
+```
+
+**Expected response (`200 OK`):**
+```json
+{
+  "transactions": [
+    {
+      "transactionType": "WITHDRAWAL",
+      "amount": "450.00",
+      "balanceAfter": "-350.00",
+      "status": "COMPLETED",
+      "currency": "GBP",
+      "description": "Large withdrawal using overdraft"
+    }
+  ],
+  "pageInfo": {
+    "hasNextPage": false,
+    "nextCursor": null
+  }
+}
+```
+
+#### Cursor-based pagination
+
+```
+GET http://localhost:8080/api/v1/accounts/INI-003/transactions?pageSize=2
+```
+
+Use the `nextCursor` value from `pageInfo` to fetch the next page:
+
+```
+GET http://localhost:8080/api/v1/accounts/INI-003/transactions?pageSize=2&cursor=<nextCursor>
+```
+
+---
+
+## H2 Console
+
+Inspect the live database at:
+
+```
+http://localhost:8080/api/h2-console
+```
+
+| Setting      | Value               |
+|--------------|---------------------|
+| JDBC URL     | `jdbc:h2:mem:testdb`|
+| Username     | `sa`                |
+| Password     | *(leave blank)*     |
+
+---
+
 ## Overview
 
 The Teya General Ledger is a financial transaction system that manages accounts, deposits, withdrawals, and maintains a transaction history. It supports overdraft policies and uses a message queue system for asynchronous transaction processing.
@@ -29,149 +252,45 @@ src/
 │   │   │   ├── SchedulerConfig.java        # Scheduling configuration
 │   │   │   └── JsonConfig.java             # JSON serialization config
 │   │   ├── entity/                          # JPA entity classes and enums
-│   │   │   ├── Account.java
-│   │   │   ├── Transaction.java
-│   │   │   ├── OverdraftPolicy.java
-│   │   │   ├── MessageQueue.java
-│   │   │   ├── TransactionType.java        # DEPOSIT, WITHDRAWAL
-│   │   │   ├── TransactionStatus.java      # PENDING, COMPLETED, FAILED
-│   │   │   └── EventType.java              # TRANSACTION_COMPLETED, etc.
 │   │   ├── repository/                      # Spring Data repositories
 │   │   ├── service/                         # Business logic services
 │   │   ├── controller/                      # REST API controllers
 │   │   ├── dto/                             # Data Transfer Objects
-│   │   │   ├── request/
-│   │   │   └── response/
 │   │   ├── exception/                       # Exception handling
-│   │   │   └── GlobalExceptionHandler.java
 │   │   ├── mapper/                          # MapStruct mappers
 │   │   └── util/                            # Utility classes
 │   └── resources/
-│       ├── application.properties           # Application configuration
-│       └── db/
-│           └── changelog/
-│               ├── db.changelog-master.xml
-│               └── v1/
-│                   └── db.changelog-001-initial-schema.xml
+│       ├── application.properties
+│       └── db/changelog/
 └── test/
     └── java/moo/interview/teya/
-        ├── service/                         # Service unit tests
-        ├── controller/                      # Controller tests
-        └── integration/                     # Integration tests
+        ├── service/
+        ├── controller/
+        └── integration/
 ```
-
-## Building and Running
-
-### Prerequisites
-- Java 17 or higher
-- Maven 3.6 or higher
-- Git
-
-### Build
-
-```bash
-cd D:\software\projects\dummy
-mvn clean compile
-```
-
-### Run
-
-```bash
-mvn spring-boot:run
-```
-
-The application will start on `http://localhost:8080` with context path `/api`.
-
-### Test
-
-```bash
-mvn test
-```
-
-## H2 Console
-
-When running locally, access the H2 database console at:
-```
-http://localhost:8080/h2-console
-```
-
-**Database URL:** `jdbc:h2:mem:testdb`  
-**Username:** `sa`  
-**Password:** (leave blank)
-
-## Database wiring (H2 in-memory)
-
-This project is configured to use an embedded H2 database for local development and tests. The key wiring is in `src/main/resources/application.properties` and is set up for an in-memory database so the application can run without any external DB:
-
-- `spring.datasource.url=jdbc:h2:mem:testdb` — in-memory H2 database (data is not persisted to disk between runs).
-- `spring.datasource.driverClassName=org.h2.Driver`
-- `spring.h2.console.enabled=true` — enables the web H2 console for debugging.
-- `spring.jpa.hibernate.ddl-auto=validate` — JPA will validate the schema against entity mappings.
-- `spring.liquibase.change-log=classpath:/db/changelog/db.changelog-master.xml` — Liquibase runs on startup and applies migrations from `src/main/resources/db/changelog`.
-
-Notes:
-- Because the DB is in-memory (`mem:`), all data is lost when the application stops. To persist data between runs, change the JDBC URL to a file-based H2 URL (for example: `jdbc:h2:file:./data/teya-db`) or switch to a production-grade DB (Postgres, MySQL, etc.).
-- The effective H2 Console URL includes the application's context path; with `server.servlet.context-path=/api` the console is reachable at `http://localhost:8080/api/h2-console`.
-
-
-## Note about optimistic locking (`version` column)
-
-The initial Liquibase schema includes a `version` column on the `account` table. During development we removed the `@Version` field from the `Account` entity in the codebase to leave the optimistic-locking strategy as a design decision to discuss during the interview. The `version` column remains in the DB migrations so you can demonstrate or experiment with optimistic locking if desired.
-
-If you want code and schema to match exactly (remove the column), update `src/main/resources/db/changelog/v1/db.changelog-001-initial-schema.xml` to drop the `version` column or regenerate the migrations accordingly.
 
 ## API Endpoints
 
-### Account Management
-- **Create Account:** `POST /api/v1/accounts`
-- **Get Balance:** `GET /api/v1/accounts/{accountNumber}/balance`
-
-### Transactions
-- **Deposit:** `POST /api/v1/accounts/{accountNumber}/transactions/deposit`
-- **Withdraw:** `POST /api/v1/accounts/{accountNumber}/transactions/withdraw`
-- **History:** `GET /api/v1/accounts/{accountNumber}/transactions`
+| Method | URL | Description |
+|--------|-----|-------------|
+| `POST` | `/api/v1/accounts` | Create a new account |
+| `GET`  | `/api/v1/accounts/{accountNumber}/balance` | Get current balance |
+| `POST` | `/api/v1/accounts/{accountNumber}/transactions/deposit` | Deposit funds |
+| `POST` | `/api/v1/accounts/{accountNumber}/transactions/withdraw` | Withdraw funds |
+| `GET`  | `/api/v1/accounts/{accountNumber}/transactions` | Transaction history (paginated) |
 
 ## Key Architecture Decisions
 
 See `ASSUMPTIONS.md` for detailed architectural assumptions and design decisions.
 
-## Database Schema
-
-The system uses 4 main tables:
-- **account** - Account information with balance and version for optimistic locking
-- **overdraft_policy** - Overdraft settings per account
-- **transaction** - Individual transactions with status tracking
-- **message_queue** - Event queue for asynchronous processing
-
 ## Transaction Processing
 
-Transactions are marked as PENDING when created and only transition to COMPLETED when processed by the message queue job, which runs every 1 second.
+Transactions are marked as `PENDING` when created and transition to `COMPLETED` when processed by the message queue job, which runs every 1 second.
 
-## Development Workflow
+## Note about optimistic locking (`version` column)
 
-This project follows Test-Driven Development (TDD):
-1. Write failing tests (RED)
-2. Implement functionality (GREEN)
-3. Refactor code (REFACTOR)
-
-## Git Workflow
-
-```bash
-# Initial setup (one time)
-git init
-git remote add origin https://github.com/morganVShepherd/teya-general-ledger.git
-
-# Regular commits
-git add .
-git commit -m "Message following conventional commits"
-git push -u origin main
-```
-
-## License
-
-(Add appropriate license information)
+The initial Liquibase schema includes a `version` column on the `account` table. During development we removed the `@Version` field from the `Account` entity to leave the optimistic-locking strategy as a design decision to discuss during the interview. The `version` column remains in the DB migrations so you can demonstrate or experiment with it if desired.
 
 ## Contact
 
 Morgan Shepherd
-

@@ -23,7 +23,7 @@ CREATE TABLE account (
 ```
 
 **Key Decisions:**
-- Account numbers are auto-generated in format: ACC-00000001, ACC-00000002, etc. (8 digits, zero-padded)
+- Account numbers are auto-generated in format: ACC-0001, ACC-0002, etc. (8 digits, zero-padded)
 - Balance stored with 6 decimal places (DECIMAL(19,6)) for precision
 - Default currency is GBP
 - `version` field enables optimistic locking
@@ -46,6 +46,7 @@ CREATE TABLE overdraft_policy (
 - One-to-one relationship with Account
 - Overdraft is disabled by default
 - Limit is optional and only applies if overdraft_allowed is true
+- Wanted an extra check for negatives
 
 ### 3. Transaction Table
 ```sql
@@ -87,7 +88,7 @@ CREATE TABLE message_queue (
 ```
 
 **Key Decisions:**
-- Event-based architecture for asynchronous processing
+- To Simulate Event-based architecture for asynchronous processing
 - Messages support up to 3 retries for failed withdrawals
 - Retry logic waits 1 second between attempts
 - Synchronization prevents duplicate processing
