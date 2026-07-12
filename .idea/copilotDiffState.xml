@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/src/main/resources/application.properties">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/resources/application.properties" />
+              <option name="originalContent" value="spring.application.name=teya-general-ledger&#10;server.port=8080&#10;server.servlet.context-path=/api&#10;&#10;logging.level.root=INFO&#10;logging.level.moo.interview.teya=DEBUG&#10;&#10;" />
+              <option name="updatedContent" value="spring.application.name=teya-general-ledger&#10;server.port=8080&#10;server.servlet.context-path=/api&#10;&#10;logging.level.root=INFO&#10;logging.level.moo.interview.teya=DEBUG&#10;&#10;# Message processor delay in milliseconds&#10;teya.message-processor.delay-ms=1000" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
