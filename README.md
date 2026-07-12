@@ -47,6 +47,8 @@ The following accounts are pre-loaded by Liquibase on startup:
 
 Use any HTTP client (Postman, curl, HTTPie, etc.) with `Content-Type: application/json`.
 
+For every **deposit** and **withdrawal** request, include a `currency` field in the JSON body. It **must match** the currency stored on the account. If it does not, the transaction is immediately marked as `FAILED` and the API returns a `409 Conflict` with error code `CURRENCY_MISMATCH`.
+
 ---
 
 ### Check an Account Balance
@@ -75,6 +77,7 @@ POST http://localhost:8080/api/v1/accounts/INI-003/transactions/deposit
 ```json
 {
   "amount": 50.00,
+  "currency": "GBP",
   "description": "Top up"
 }
 ```
@@ -107,6 +110,7 @@ POST http://localhost:8080/api/v1/accounts/INI-003/transactions/withdraw
 ```json
 {
   "amount": 450.00,
+  "currency": "GBP",
   "description": "Large withdrawal using overdraft"
 }
 ```
@@ -153,6 +157,7 @@ POST http://localhost:8080/api/v1/accounts/INI-001/transactions/withdraw
 ```json
 {
   "amount": 50.00,
+  "currency": "GBP",
   "description": "Withdrawal that exceeds balance"
 }
 ```
@@ -166,6 +171,33 @@ POST http://localhost:8080/api/v1/accounts/INI-001/transactions/withdraw
 ```
 
 The account balance remains unchanged at **£10.00**.
+
+---
+
+### Example 3 — Currency Mismatch (`INI-003`)
+
+Account `INI-003` is stored in **GBP**. If you send a deposit or withdrawal request in another currency, the request fails immediately.
+
+```
+POST http://localhost:8080/api/v1/accounts/INI-003/transactions/deposit
+```
+```json
+{
+  "amount": 50.00,
+  "currency": "EUR",
+  "description": "Wrong currency"
+}
+```
+
+**Expected response (`409 Conflict`):**
+```json
+{
+  "errorCode": "CURRENCY_MISMATCH",
+  "message": "Transaction currency must match account currency"
+}
+```
+
+The account balance remains unchanged, and the failed attempt is recorded in transaction history with status `FAILED`.
 
 ---
 

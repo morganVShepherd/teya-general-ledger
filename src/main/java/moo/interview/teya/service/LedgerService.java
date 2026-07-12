@@ -8,6 +8,7 @@ import moo.interview.teya.entity.Transaction;
 import moo.interview.teya.entity.enums.EventType;
 import moo.interview.teya.entity.enums.TransactionStatus;
 import moo.interview.teya.entity.enums.TransactionType;
+import moo.interview.teya.exception.CurrencyMismatchException;
 import moo.interview.teya.repository.AccountRepository;
 import moo.interview.teya.repository.MessageQueueRepository;
 import moo.interview.teya.repository.TransactionRepository;
@@ -38,10 +39,13 @@ public class LedgerService {
         this.messageQueueService = messageQueueService;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = CurrencyMismatchException.class)
     public Transaction deposit(String accountNumber, DepositRequest request) {
         if (request == null || request.amount() == null) {
             throw new IllegalArgumentException("Amount is required");
+        }
+        if (request.currency() == null || request.currency().isBlank()) {
+            throw new IllegalArgumentException("Currency is required");
         }
         BigDecimal amount = request.amount().setScale(6);
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -57,6 +61,8 @@ public class LedgerService {
             throw new IllegalArgumentException("Account not found");
         }
         Account acct = acctOpt.get();
+
+        validateRequestCurrency(acct, request.currency(), TransactionType.DEPOSIT, amount, request.description());
 
         // Create transaction (PENDING)
         Transaction tx = Transaction.builder()
@@ -92,10 +98,13 @@ public class LedgerService {
         return transactionRepository.findById(saved.getId()).orElse(saved);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = CurrencyMismatchException.class)
     public Transaction withdraw(String accountNumber, WithdrawalRequest request) {
         if (request == null || request.amount() == null) {
             throw new IllegalArgumentException("Amount is required");
+        }
+        if (request.currency() == null || request.currency().isBlank()) {
+            throw new IllegalArgumentException("Currency is required");
         }
         BigDecimal amount = request.amount().setScale(6);
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -110,6 +119,8 @@ public class LedgerService {
             throw new IllegalArgumentException("Account not found");
         }
         Account acct = acctOpt.get();
+
+        validateRequestCurrency(acct, request.currency(), TransactionType.WITHDRAWAL, amount, request.description());
 
         // Calculate pending withdrawals
         BigDecimal pendingWithdrawals = transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(acct.getId(), TransactionStatus.PENDING)
@@ -151,6 +162,30 @@ public class LedgerService {
 
         // For withdrawals, return immediately (async processing)
         return saved;
+    }
+
+    private void validateRequestCurrency(Account account,
+                                         String requestCurrency,
+                                         TransactionType transactionType,
+                                         BigDecimal amount,
+                                         String description) {
+        if (account.getCurrency().equalsIgnoreCase(requestCurrency.trim())) {
+            return;
+        }
+
+        Transaction failed = Transaction.builder()
+                .accountId(account.getId())
+                .transactionType(transactionType)
+                .amount(amount)
+                .balanceAfter(account.getCurrentBalance())
+                .status(TransactionStatus.FAILED)
+                .currency(requestCurrency.trim().toUpperCase())
+                .description(description)
+                .createdAtInUTC(Instant.now())
+                .build();
+        transactionRepository.save(failed);
+
+        throw new CurrencyMismatchException("Transaction currency must match account currency");
     }
 }
 

@@ -46,6 +46,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
+    @ExceptionHandler(CurrencyMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleCurrencyMismatchException(CurrencyMismatchException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                "CURRENCY_MISMATCH",
+                UUID.randomUUID().toString(),
+                Instant.now().toString(),
+                ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
     /**
      * Handle NoSuchElementException - used for missing resources (e.g., account not found).
      */

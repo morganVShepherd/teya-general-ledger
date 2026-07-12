@@ -43,7 +43,7 @@ class LedgerApiIntegrationTest {
 
         ResponseEntity<String> deposit = postJson(
                 path("/v1/accounts/" + accountNumber + "/transactions/deposit"),
-                "{\"amount\":500.00,\"description\":\"Initial funding\"}"
+                "{\"amount\":500.00,\"currency\":\"GBP\",\"description\":\"Initial funding\"}"
         );
         assertEquals(HttpStatus.CREATED, deposit.getStatusCode());
         JsonNode depositNode = objectMapper.readTree(deposit.getBody());
@@ -52,7 +52,7 @@ class LedgerApiIntegrationTest {
 
         ResponseEntity<String> invalidWithdrawal = postJson(
                 path("/v1/accounts/" + accountNumber + "/transactions/withdraw"),
-                "{\"amount\":5000.00,\"description\":\"Too much\"}"
+                "{\"amount\":5000.00,\"currency\":\"GBP\",\"description\":\"Too much\"}"
         );
         assertEquals(HttpStatus.CONFLICT, invalidWithdrawal.getStatusCode());
 
@@ -61,7 +61,7 @@ class LedgerApiIntegrationTest {
 
         ResponseEntity<String> withdrawal = postJson(
                 path("/v1/accounts/" + accountNumber + "/transactions/withdraw"),
-                "{\"amount\":200.00,\"description\":\"Cash out\"}"
+                "{\"amount\":200.00,\"currency\":\"GBP\",\"description\":\"Cash out\"}"
         );
         assertEquals(HttpStatus.ACCEPTED, withdrawal.getStatusCode());
 
@@ -92,9 +92,9 @@ class LedgerApiIntegrationTest {
     void history_cursorPagination_returnsNextCursorAndNextPage() throws Exception {
         String accountNumber = createAccountAndGetNumber();
 
-        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":10.00,\"description\":\"d1\"}");
-        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":20.00,\"description\":\"d2\"}");
-        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":30.00,\"description\":\"d3\"}");
+        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":10.00,\"currency\":\"GBP\",\"description\":\"d1\"}");
+        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":20.00,\"currency\":\"GBP\",\"description\":\"d2\"}");
+        postJson(path("/v1/accounts/" + accountNumber + "/transactions/deposit"), "{\"amount\":30.00,\"currency\":\"GBP\",\"description\":\"d3\"}");
 
         ResponseEntity<String> page1 = restTemplate.getForEntity(
                 path("/v1/accounts/" + accountNumber + "/transactions?pageSize=2"),
@@ -145,6 +145,89 @@ class LedgerApiIntegrationTest {
         assertEquals(HttpStatus.BAD_REQUEST, invalid.getStatusCode());
         JsonNode node = objectMapper.readTree(invalid.getBody());
         assertEquals("VALIDATION_ERROR", node.get("errorCode").asText());
+    }
+
+    @Test
+    void deposit_currencyMismatch_returnsImmediateFailureAndDoesNotChangeBalance() throws Exception {
+        String accountNumber = createAccountAndGetNumber();
+
+        ResponseEntity<String> response = postJson(
+                path("/v1/accounts/" + accountNumber + "/transactions/deposit"),
+                "{\"amount\":50.00,\"currency\":\"EUR\",\"description\":\"Wrong currency\"}"
+        );
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        JsonNode node = objectMapper.readTree(response.getBody());
+        assertEquals("CURRENCY_MISMATCH", node.get("errorCode").asText());
+        assertEquals("Transaction currency must match account currency", node.get("message").asText());
+
+        ResponseEntity<String> balanceResponse = restTemplate.getForEntity(
+                path("/v1/accounts/" + accountNumber + "/balance"),
+                String.class
+        );
+        assertEquals(HttpStatus.OK, balanceResponse.getStatusCode());
+        JsonNode balanceNode = objectMapper.readTree(balanceResponse.getBody());
+        assertEquals("0.00", balanceNode.get("currentBalance").asText());
+
+        ResponseEntity<String> historyResponse = restTemplate.getForEntity(
+                path("/v1/accounts/" + accountNumber + "/transactions?pageSize=10"),
+                String.class
+        );
+        assertEquals(HttpStatus.OK, historyResponse.getStatusCode());
+        JsonNode historyNode = objectMapper.readTree(historyResponse.getBody());
+        JsonNode failedTransaction = historyNode.get("transactions").get(0);
+        assertEquals("FAILED", failedTransaction.get("status").asText());
+        assertEquals("EUR", failedTransaction.get("currency").asText());
+        assertEquals("50.00", failedTransaction.get("amount").asText());
+        assertEquals("0.00", failedTransaction.get("balanceAfter").asText());
+    }
+
+    @Test
+    void deposit_missingCurrency_returnsValidationError() throws Exception {
+        String accountNumber = createAccountAndGetNumber();
+
+        ResponseEntity<String> response = postJson(
+                path("/v1/accounts/" + accountNumber + "/transactions/deposit"),
+                "{\"amount\":50.00,\"description\":\"Missing currency\"}"
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        JsonNode node = objectMapper.readTree(response.getBody());
+        assertEquals("VALIDATION_ERROR", node.get("errorCode").asText());
+        assertEquals("Currency is required", node.get("message").asText());
+    }
+
+    @Test
+    void withdraw_currencyMismatch_returnsImmediateFailureAndRecordsFailedTransaction() throws Exception {
+        ResponseEntity<String> response = postJson(
+                path("/v1/accounts/INI-003/transactions/withdraw"),
+                "{\"amount\":25.00,\"currency\":\"EUR\",\"description\":\"Wrong currency withdraw\"}"
+        );
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        JsonNode node = objectMapper.readTree(response.getBody());
+        assertEquals("CURRENCY_MISMATCH", node.get("errorCode").asText());
+        assertEquals("Transaction currency must match account currency", node.get("message").asText());
+
+        ResponseEntity<String> balanceResponse = restTemplate.getForEntity(
+                path("/v1/accounts/INI-003/balance"),
+                String.class
+        );
+        assertEquals(HttpStatus.OK, balanceResponse.getStatusCode());
+        JsonNode balanceNode = objectMapper.readTree(balanceResponse.getBody());
+        assertEquals("100.00", balanceNode.get("currentBalance").asText());
+
+        ResponseEntity<String> historyResponse = restTemplate.getForEntity(
+                path("/v1/accounts/INI-003/transactions?pageSize=10"),
+                String.class
+        );
+        assertEquals(HttpStatus.OK, historyResponse.getStatusCode());
+        JsonNode historyNode = objectMapper.readTree(historyResponse.getBody());
+        JsonNode failedTransaction = historyNode.get("transactions").get(0);
+        assertEquals("FAILED", failedTransaction.get("status").asText());
+        assertEquals("EUR", failedTransaction.get("currency").asText());
+        assertEquals("25.00", failedTransaction.get("amount").asText());
+        assertEquals("100.00", failedTransaction.get("balanceAfter").asText());
     }
 
     private String createAccountAndGetNumber() throws Exception {
