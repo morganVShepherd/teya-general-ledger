@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import moo.interview.teya.entity.enums.EventType;
-import moo.interview.teya.entity.enums.EventType;
 
 import java.time.Instant;
 
@@ -38,7 +37,8 @@ public class MessageQueue {
     @Enumerated(EnumType.STRING)
     private EventType eventType;
 
-    @Column(name = "payload", columnDefinition = "TEXT", nullable = false)
+    @Lob
+    @Column(name = "payload", nullable = false)
     private String payload;
 
     @Column(name = "processed", nullable = false)
