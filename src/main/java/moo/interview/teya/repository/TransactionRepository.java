@@ -1,7 +1,7 @@
 package moo.interview.teya.repository;
 
 import moo.interview.teya.entity.Transaction;
-import moo.interview.teya.entity.TransactionStatus;
+import moo.interview.teya.entity.enums.TransactionStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -99,6 +99,21 @@ http://localhost:8080/h2-console
 **Username:** `sa`  
 **Password:** (leave blank)
 
+## Database wiring (H2 in-memory)
+
+This project is configured to use an embedded H2 database for local development and tests. The key wiring is in `src/main/resources/application.properties` and is set up for an in-memory database so the application can run without any external DB:
+
+- `spring.datasource.url=jdbc:h2:mem:testdb` — in-memory H2 database (data is not persisted to disk between runs).
+- `spring.datasource.driverClassName=org.h2.Driver`
+- `spring.h2.console.enabled=true` — enables the web H2 console for debugging.
+- `spring.jpa.hibernate.ddl-auto=validate` — JPA will validate the schema against entity mappings.
+- `spring.liquibase.change-log=classpath:/db/changelog/db.changelog-master.xml` — Liquibase runs on startup and applies migrations from `src/main/resources/db/changelog`.
+
+Notes:
+- Because the DB is in-memory (`mem:`), all data is lost when the application stops. To persist data between runs, change the JDBC URL to a file-based H2 URL (for example: `jdbc:h2:file:./data/teya-db`) or switch to a production-grade DB (Postgres, MySQL, etc.).
+- The effective H2 Console URL includes the application's context path; with `server.servlet.context-path=/api` the console is reachable at `http://localhost:8080/api/h2-console`.
+
+
 ## API Endpoints
 
 ### Account Management

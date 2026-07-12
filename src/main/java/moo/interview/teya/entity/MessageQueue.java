@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import moo.interview.teya.entity.enums.EventType;
+import moo.interview.teya.entity.enums.EventType;
 
 import java.time.Instant;
 

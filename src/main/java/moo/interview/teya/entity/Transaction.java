@@ -5,6 +5,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import moo.interview.teya.entity.enums.TransactionStatus;
+import moo.interview.teya.entity.enums.TransactionType;
+import moo.interview.teya.entity.enums.TransactionStatus;
+import moo.interview.teya.entity.enums.TransactionType;
 
 import java.math.BigDecimal;
 import java.time.Instant;

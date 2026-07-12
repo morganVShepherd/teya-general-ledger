@@ -1,4 +1,4 @@
-package moo.interview.teya.entity;
+package moo.interview.teya.entity.enums;
 
 /**
  * Enum representing different types of events for the message queue.
