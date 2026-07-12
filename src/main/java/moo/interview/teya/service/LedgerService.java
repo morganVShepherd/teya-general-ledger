@@ -1,6 +1,7 @@
 package moo.interview.teya.service;
 
 import moo.interview.teya.dto.request.DepositRequest;
+import moo.interview.teya.dto.request.WithdrawalRequest;
 import moo.interview.teya.entity.Account;
 import moo.interview.teya.entity.MessageQueue;
 import moo.interview.teya.entity.Transaction;
@@ -89,6 +90,67 @@ public class LedgerService {
 
         // reload transaction
         return transactionRepository.findById(saved.getId()).orElse(saved);
+    }
+
+    @Transactional
+    public Transaction withdraw(String accountNumber, WithdrawalRequest request) {
+        if (request == null || request.amount() == null) {
+            throw new IllegalArgumentException("Amount is required");
+        }
+        BigDecimal amount = request.amount().setScale(6);
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount must be greater than 0");
+        }
+        if (amount.compareTo(MAX_AMOUNT) > 0) {
+            throw new IllegalArgumentException("Amount exceeds maximum allowed");
+        }
+
+        Optional<Account> acctOpt = accountRepository.findByAccountNumber(accountNumber);
+        if (acctOpt.isEmpty()) {
+            throw new IllegalArgumentException("Account not found");
+        }
+        Account acct = acctOpt.get();
+
+        // Calculate pending withdrawals
+        BigDecimal pendingWithdrawals = transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(acct.getId(), TransactionStatus.PENDING)
+                .stream()
+                .filter(t -> t.getTransactionType() == TransactionType.WITHDRAWAL)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal available = acct.getCurrentBalance().subtract(pendingWithdrawals);
+        if (available.compareTo(amount) < 0) {
+            // insufficient funds
+            throw new IllegalStateException("Insufficient balance");
+        }
+
+        Transaction tx = Transaction.builder()
+                .accountId(acct.getId())
+                .transactionType(TransactionType.WITHDRAWAL)
+                .amount(amount)
+                .balanceAfter(acct.getCurrentBalance())
+                .status(TransactionStatus.PENDING)
+                .currency(acct.getCurrency())
+                .description(request.description())
+                .createdAtInUTC(Instant.now())
+                .build();
+
+        Transaction saved = transactionRepository.save(tx);
+
+        MessageQueue msg = MessageQueue.builder()
+                .accountNumber(acct.getAccountNumber())
+                .transactionId(saved.getId())
+                .eventType(EventType.TRANSACTION_COMPLETED)
+                .payload("{}")
+                .processed(false)
+                .retryCount(0)
+                .createdAtInUTC(Instant.now())
+                .build();
+
+        messageQueueRepository.save(msg);
+
+        // For withdrawals, return immediately (async processing)
+        return saved;
     }
 }
 

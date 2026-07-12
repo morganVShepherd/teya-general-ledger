@@ -1,6 +1,7 @@
 package moo.interview.teya.controller;
 
 import moo.interview.teya.dto.request.DepositRequest;
+import moo.interview.teya.dto.request.WithdrawalRequest;
 import moo.interview.teya.dto.response.TransactionResponse;
 import moo.interview.teya.entity.Transaction;
 import moo.interview.teya.mapper.TransactionMapper;
@@ -32,6 +33,13 @@ public class TransactionController {
         Transaction tx = ledgerService.deposit(accountNumber, request);
         TransactionResponse resp = transactionMapper.toResponse(tx);
         return ResponseEntity.status(HttpStatus.CREATED).body(resp);
+    }
+
+    @PostMapping("/withdraw")
+    public ResponseEntity<TransactionResponse> withdraw(@PathVariable String accountNumber, @RequestBody WithdrawalRequest request) {
+        Transaction tx = ledgerService.withdraw(accountNumber, request);
+        TransactionResponse resp = transactionMapper.toResponse(tx);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(resp);
     }
 }
 

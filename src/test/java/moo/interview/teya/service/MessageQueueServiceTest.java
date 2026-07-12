@@ -101,6 +101,7 @@ class MessageQueueServiceTest {
 
         when(transactionRepository.findById(200L)).thenReturn(Optional.of(tx));
         when(accountRepository.findById(10L)).thenReturn(Optional.of(acct));
+        when(transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(10L, TransactionStatus.PENDING)).thenReturn(List.of(tx));
         when(transactionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(accountRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(messageQueueRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

@@ -32,6 +32,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
+     * Handle IllegalStateException - used for business rule violations (e.g., insufficient balance).
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalStateException(IllegalStateException ex) {
+        ErrorResponse errorResponse = new ErrorResponse(
+                "INSUFFICIENT_BALANCE",
+                UUID.randomUUID().toString(),
+                Instant.now().toString(),
+                ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
+    /**
      * Handle general exceptions - catch-all for unexpected errors
      */
     @ExceptionHandler(Exception.class)
