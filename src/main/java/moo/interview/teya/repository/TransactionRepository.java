@@ -56,5 +56,22 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             Long accountId,
             TransactionStatus status
     );
+
+    /**
+     * Find transaction history for an account using optional cursor and date range filters.
+     * Results are ordered by id descending for cursor pagination.
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.accountId = :accountId " +
+           "AND (:fromDate IS NULL OR t.createdAtInUTC >= :fromDate) " +
+           "AND (:toDate IS NULL OR t.createdAtInUTC <= :toDate) " +
+           "AND (:cursorId IS NULL OR t.id < :cursorId) " +
+           "ORDER BY t.id DESC")
+    List<Transaction> findHistoryPage(
+            @Param("accountId") Long accountId,
+            @Param("cursorId") Long cursorId,
+            @Param("fromDate") Instant fromDate,
+            @Param("toDate") Instant toDate,
+            Pageable pageable
+    );
 }
 
