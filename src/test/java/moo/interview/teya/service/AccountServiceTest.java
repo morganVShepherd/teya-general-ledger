@@ -1,6 +1,5 @@
 package moo.interview.teya.service;
 
-import moo.interview.teya.dto.request.CreateAccountRequest;
 import moo.interview.teya.dto.response.AccountResponse;
 import moo.interview.teya.entity.Account;
 import moo.interview.teya.entity.OverdraftPolicy;
@@ -12,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,18 +28,22 @@ class AccountServiceTest {
     private AccountMapper accountMapper;
     @Mock
     private OverdraftPolicyRepository overdraftPolicyRepository;
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     private AccountService accountService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        accountService = new AccountService(accountRepository, overdraftPolicyRepository, accountMapper);
+        accountService = new AccountService(accountRepository, overdraftPolicyRepository, accountMapper, jdbcTemplate);
     }
 
     @Test
     void createAccount_generatesAccountNumber_andReturnsResponse() {
-        // Prepare saved account after first save (id assigned)
+        when(jdbcTemplate.queryForObject("SELECT NEXT VALUE FOR account_number_seq", Long.class)).thenReturn(1L);
+
+        // Persisted account gets DB id assigned
         when(accountRepository.save(any())).thenAnswer(invocation -> {
             Account a = invocation.getArgument(0);
             if (a.getId() == null) {
@@ -60,13 +64,13 @@ class AccountServiceTest {
                 saved.getId(), saved.getAccountNumber(), saved.getCurrentBalance(), saved.getCurrency(), saved.getCreatedAtInUTC(), saved.getUpdatedAtInUTC()
         ));
 
-        AccountResponse resp = accountService.createAccount(new CreateAccountRequest());
+        AccountResponse resp = accountService.createAccount();
 
         assertNotNull(resp);
         assertEquals("ACC-00000001", resp.accountNumber());
 
-        // Verify accountRepository.save called at least once
-        verify(accountRepository, atLeast(1)).save(any());
+        verify(jdbcTemplate).queryForObject("SELECT NEXT VALUE FOR account_number_seq", Long.class);
+        verify(accountRepository).save(any());
 
         ArgumentCaptor<OverdraftPolicy> overdraftCaptor = ArgumentCaptor.forClass(OverdraftPolicy.class);
         verify(overdraftPolicyRepository).save(overdraftCaptor.capture());

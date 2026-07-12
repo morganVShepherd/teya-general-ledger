@@ -1,17 +1,18 @@
 package moo.interview.teya.service;
 
-import moo.interview.teya.dto.request.CreateAccountRequest;
 import moo.interview.teya.dto.response.AccountResponse;
 import moo.interview.teya.entity.Account;
 import moo.interview.teya.entity.OverdraftPolicy;
 import moo.interview.teya.repository.AccountRepository;
 import moo.interview.teya.repository.OverdraftPolicyRepository;
 import moo.interview.teya.mapper.AccountMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Objects;
 
 @Service
 public class AccountService {
@@ -19,44 +20,47 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final OverdraftPolicyRepository overdraftPolicyRepository;
     private final AccountMapper accountMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     public AccountService(AccountRepository accountRepository,
                           OverdraftPolicyRepository overdraftPolicyRepository,
-                          AccountMapper accountMapper) {
+                          AccountMapper accountMapper,
+                          JdbcTemplate jdbcTemplate) {
         this.accountRepository = accountRepository;
         this.overdraftPolicyRepository = overdraftPolicyRepository;
         this.accountMapper = accountMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional
-    public AccountResponse createAccount(CreateAccountRequest request) {
-        Instant now = Instant.now();
-        Account acct = Account.builder()
-                .accountNumber(null)
-                .currentBalance(BigDecimal.ZERO.setScale(6))
-                .currency("GBP")
-                .createdAtInUTC(now)
-                .updatedAtInUTC(now)
-                .build();
+    public AccountResponse createAccount() {
+            Instant now = Instant.now();
+            Long generatedValue = Objects.requireNonNull(
+                    jdbcTemplate.queryForObject("SELECT NEXT VALUE FOR account_number_seq", Long.class),
+                    "Failed to generate account number value"
+            );
+            String accountNumber = String.format("ACC-%04d", generatedValue);
 
-        // Persist to get ID
-        Account saved = accountRepository.save(acct);
+            Account acct = Account.builder()
+                    .accountNumber(accountNumber)
+                    .currentBalance(BigDecimal.ZERO.setScale(6))
+                    .currency("GBP")
+                    .createdAtInUTC(now)
+                    .updatedAtInUTC(now)
+                    .build();
 
-        // Generate account number using ID
-        String accountNumber = String.format("ACC-%08d", saved.getId());
-        saved.setAccountNumber(accountNumber);
-        saved = accountRepository.save(saved);
+            Account saved = accountRepository.save(acct);
 
-        OverdraftPolicy defaultPolicy = OverdraftPolicy.builder()
-                .accountId(saved.getId())
-                .overdraftAllowed(false)
-                .overdraftLimit(BigDecimal.ZERO.setScale(6))
-                .createdAtInUTC(now)
-                .updatedAtInUTC(now)
-                .build();
-        overdraftPolicyRepository.save(defaultPolicy);
+            OverdraftPolicy defaultPolicy = OverdraftPolicy.builder()
+                    .accountId(saved.getId())
+                    .overdraftAllowed(false)
+                    .overdraftLimit(BigDecimal.ZERO.setScale(6))
+                    .createdAtInUTC(now)
+                    .updatedAtInUTC(now)
+                    .build();
+            overdraftPolicyRepository.save(defaultPolicy);
 
-        return accountMapper.toResponse(saved);
+            return accountMapper.toResponse(saved);
     }
 }
 
