@@ -3,7 +3,6 @@ package integration.tests;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import moo.interview.teya.Application;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -47,6 +46,9 @@ class LedgerApiIntegrationTest {
                 "{\"amount\":500.00,\"description\":\"Initial funding\"}"
         );
         assertEquals(HttpStatus.CREATED, deposit.getStatusCode());
+        JsonNode depositNode = objectMapper.readTree(deposit.getBody());
+        assertEquals("500.00", depositNode.get("amount").asText());
+        assertEquals("500.00", depositNode.get("balanceAfter").asText());
 
         ResponseEntity<String> invalidWithdrawal = postJson(
                 path("/v1/accounts/" + accountNumber + "/transactions/withdraw"),
@@ -65,6 +67,7 @@ class LedgerApiIntegrationTest {
 
         // Withdrawal processing is async; poll balance until queue worker applies it.
         JsonNode finalBalanceNode = awaitBalance(accountNumber, new BigDecimal("300.00"));
+        assertEquals("300.00", finalBalanceNode.get("currentBalance").asText());
         assertEquals("GBP", finalBalanceNode.get("currency").asText());
         assertNotNull(finalBalanceNode.get("lastUpdatedAtInUTC").asText());
 
@@ -75,7 +78,14 @@ class LedgerApiIntegrationTest {
         assertEquals(HttpStatus.OK, history.getStatusCode());
 
         JsonNode historyNode = objectMapper.readTree(history.getBody());
-        assertTrue(historyNode.get("transactions").size() >= 2);
+        JsonNode transactions = historyNode.get("transactions");
+        assertTrue(transactions.size() >= 2);
+        for (JsonNode tx : transactions) {
+            assertTrue(tx.get("amount").asText().matches("\\d+\\.\\d{2}"),
+                    "amount must be formatted to 2 d.p.: " + tx.get("amount").asText());
+            assertTrue(tx.get("balanceAfter").asText().matches("\\d+\\.\\d{2}"),
+                    "balanceAfter must be formatted to 2 d.p.: " + tx.get("balanceAfter").asText());
+        }
     }
 
     @Test
@@ -99,6 +109,13 @@ class LedgerApiIntegrationTest {
         assertNotNull(nextCursor);
         assertFalse(nextCursor.isBlank());
 
+        for (JsonNode tx : page1Node.get("transactions")) {
+            assertTrue(tx.get("amount").asText().matches("\\d+\\.\\d{2}"),
+                    "amount must be formatted to 2 d.p.: " + tx.get("amount").asText());
+            assertTrue(tx.get("balanceAfter").asText().matches("\\d+\\.\\d{2}"),
+                    "balanceAfter must be formatted to 2 d.p.: " + tx.get("balanceAfter").asText());
+        }
+
         ResponseEntity<String> page2 = restTemplate.getForEntity(
                 path("/v1/accounts/" + accountNumber + "/transactions?pageSize=2&cursor=" + nextCursor),
                 String.class
@@ -107,6 +124,13 @@ class LedgerApiIntegrationTest {
 
         JsonNode page2Node = objectMapper.readTree(page2.getBody());
         assertTrue(page2Node.get("transactions").size() >= 1);
+
+        for (JsonNode tx : page2Node.get("transactions")) {
+            assertTrue(tx.get("amount").asText().matches("\\d+\\.\\d{2}"),
+                    "amount must be formatted to 2 d.p.: " + tx.get("amount").asText());
+            assertTrue(tx.get("balanceAfter").asText().matches("\\d+\\.\\d{2}"),
+                    "balanceAfter must be formatted to 2 d.p.: " + tx.get("balanceAfter").asText());
+        }
     }
 
     @Test
