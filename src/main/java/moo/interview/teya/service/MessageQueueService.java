@@ -129,5 +129,12 @@ public class MessageQueueService {
 
         log.info("Processed message id={} txnId={} account={} newBalance={}", msg.getId(), tx.getId(), acct.getAccountNumber(), newBalance);
     }
+
+    /**
+     * Public helper to process a single message immediately (used by synchronous flows e.g. deposits).
+     */
+    public void processNow(MessageQueue msg) {
+        processMessage(msg);
+    }
 }
 

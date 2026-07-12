@@ -114,6 +114,12 @@ Notes:
 - The effective H2 Console URL includes the application's context path; with `server.servlet.context-path=/api` the console is reachable at `http://localhost:8080/api/h2-console`.
 
 
+## Note about optimistic locking (`version` column)
+
+The initial Liquibase schema includes a `version` column on the `account` table. During development we removed the `@Version` field from the `Account` entity in the codebase to leave the optimistic-locking strategy as a design decision to discuss during the interview. The `version` column remains in the DB migrations so you can demonstrate or experiment with optimistic locking if desired.
+
+If you want code and schema to match exactly (remove the column), update `src/main/resources/db/changelog/v1/db.changelog-001-initial-schema.xml` to drop the `version` column or regenerate the migrations accordingly.
+
 ## API Endpoints
 
 ### Account Management

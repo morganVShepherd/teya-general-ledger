@@ -11,7 +11,6 @@ import java.time.Instant;
 
 /**
  * Account entity representing a ledger account.
- * Uses optimistic locking via @Version field.
  */
 @Entity
 @Table(name = "account")
@@ -34,9 +33,7 @@ public class Account {
     @Column(name = "currency", nullable = false)
     private String currency;
 
-    @Version
-    @Column(name = "version")
-    private Long version;
+    // Version field removed - optimistic locking handled differently or not used
 
     @Column(name = "created_at_in_utc", nullable = false)
     private Instant createdAtInUTC;
