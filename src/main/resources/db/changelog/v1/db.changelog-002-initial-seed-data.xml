@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+    <changeSet id="002-initial-seed-accounts-overdraft" author="system">
+        <comment>Seed initial accounts and overdraft policies for interview scenarios</comment>
+
+        <insert tableName="account">
+            <column name="id" valueNumeric="1001"/>
+            <column name="account_number" value="INI-001"/>
+            <column name="current_balance" valueNumeric="10.000000"/>
+            <column name="currency" value="GBP"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <insert tableName="account">
+            <column name="id" valueNumeric="1002"/>
+            <column name="account_number" value="INI-002"/>
+            <column name="current_balance" valueNumeric="50.000000"/>
+            <column name="currency" value="GBP"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <insert tableName="account">
+            <column name="id" valueNumeric="1003"/>
+            <column name="account_number" value="INI-003"/>
+            <column name="current_balance" valueNumeric="100.000000"/>
+            <column name="currency" value="GBP"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <insert tableName="account">
+            <column name="id" valueNumeric="1004"/>
+            <column name="account_number" value="INI-004"/>
+            <column name="current_balance" valueNumeric="500.000000"/>
+            <column name="currency" value="GBP"/>
+            <column name="version" valueNumeric="0"/>
+            <column name="created_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <insert tableName="overdraft_policy">
+            <column name="account_id" valueNumeric="1001"/>
+            <column name="overdraft_allowed" valueBoolean="false"/>
+            <column name="created_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <insert tableName="overdraft_policy">
+            <column name="account_id" valueNumeric="1002"/>
+            <column name="overdraft_allowed" valueBoolean="false"/>
+            <column name="created_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <insert tableName="overdraft_policy">
+            <column name="account_id" valueNumeric="1003"/>
+            <column name="overdraft_allowed" valueBoolean="true"/>
+            <column name="overdraft_limit" valueNumeric="500.000000"/>
+            <column name="created_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <insert tableName="overdraft_policy">
+            <column name="account_id" valueNumeric="1004"/>
+            <column name="overdraft_allowed" valueBoolean="true"/>
+            <column name="overdraft_limit" valueNumeric="1000.000000"/>
+            <column name="created_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at_in_utc" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
+
