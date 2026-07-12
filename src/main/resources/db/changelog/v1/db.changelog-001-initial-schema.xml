@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.1.xsd">
+
+    <changeSet id="001-initial-schema" author="system">
+        <comment>Create initial schema for teya-general-ledger</comment>
+
+        <!-- Create ACCOUNT table -->
+        <createTable tableName="account">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="account_number" type="VARCHAR(8)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_account_number"/>
+            </column>
+            <column name="current_balance" type="DECIMAL(19,6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)" defaultValue="GBP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at_in_utc" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at_in_utc" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- Create OVERDRAFT_POLICY table -->
+        <createTable tableName="overdraft_policy">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_overdraft_policy_account_id"
+                             foreignKeyName="fk_overdraft_policy_account" referencedTableName="account" referencedColumnNames="id"/>
+            </column>
+            <column name="overdraft_allowed" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="overdraft_limit" type="DECIMAL(19,6)"/>
+            <column name="created_at_in_utc" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at_in_utc" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- Create TRANSACTION table -->
+        <createTable tableName="transaction">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_transaction_account" referencedTableName="account" referencedColumnNames="id"/>
+            </column>
+            <column name="transaction_type" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount" type="DECIMAL(19,6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="balance_after" type="DECIMAL(19,6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(255)"/>
+            <column name="created_at_in_utc" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- Create index on transaction account_id and created_at_in_utc for efficient queries -->
+        <createIndex indexName="idx_transaction_account_created" tableName="transaction">
+            <column name="account_id"/>
+            <column name="created_at_in_utc"/>
+        </createIndex>
+
+        <!-- Create MESSAGE_QUEUE table -->
+        <createTable tableName="message_queue">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="account_number" type="VARCHAR(8)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="transaction_id" type="BIGINT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_message_queue_transaction" referencedTableName="transaction" referencedColumnNames="id"/>
+            </column>
+            <column name="event_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="processed" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="retry_count" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at_in_utc" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="processed_at_in_utc" type="TIMESTAMP"/>
+        </createTable>
+
+        <!-- Create index on message_queue for efficient processing -->
+        <createIndex indexName="idx_message_queue_processed_created" tableName="message_queue">
+            <column name="processed"/>
+            <column name="created_at_in_utc"/>
+        </createIndex>
+
+    </changeSet>
+
+</databaseChangeLog>
+
