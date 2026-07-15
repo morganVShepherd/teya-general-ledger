@@ -33,7 +33,15 @@ public class Account {
     @Column(name = "currency", nullable = false)
     private String currency;
 
-    // Version field removed - optimistic locking handled differently or not used
+    /**
+     * Version field for optimistic locking.
+     * JPA will automatically increment this on every update and throw
+     * {@link jakarta.persistence.OptimisticLockException} if a concurrent
+     * modification is detected.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @Column(name = "created_at_in_utc", nullable = false)
     private Instant createdAtInUTC;
