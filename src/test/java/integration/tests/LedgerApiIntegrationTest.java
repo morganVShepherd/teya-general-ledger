@@ -18,6 +18,9 @@ import org.springframework.http.ResponseEntity;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -228,6 +231,54 @@ class LedgerApiIntegrationTest {
         assertEquals("EUR", failedTransaction.get("currency").asText());
         assertEquals("25.00", failedTransaction.get("amount").asText());
         assertEquals("100.00", failedTransaction.get("balanceAfter").asText());
+    }
+
+    @Test
+    void concurrentWithdrawl() throws Exception {
+
+        String accountNumber = createAccountAndGetNumber();
+
+        ResponseEntity<String> deposit = postJson(
+                path("/v1/accounts/" + accountNumber + "/transactions/deposit"),
+                "{\"amount\":100.00,\"currency\":\"GBP\",\"description\":\"Initial funding\"}"
+        );
+
+        awaitBalance(accountNumber, new BigDecimal("100.00"));
+
+
+        Map<Integer, ResponseEntity<String>> results = new ConcurrentHashMap<>();
+
+        IntStream.range(0, 150)
+                .parallel()
+                .forEach(a -> {
+                    ResponseEntity<String> withdrawal = postJson(
+                            path("/v1/accounts/" + accountNumber + "/transactions/withdraw"),
+                            // "{\"amount\":200.00,\"currency\":\"GBP\",\"description\":\"Cash out\"}"
+                            "{\"amount\":1.00,\"currency\":\"GBP\",\"description\":\"Cash out\"}"
+                    );
+                    results.put(a, withdrawal);
+                });
+
+        long acceptedCount = results.values().stream()
+                .filter(r -> r.getStatusCode() == HttpStatus.ACCEPTED)
+                .count();
+
+        long rejectedCount = results.values().stream()
+                .filter(r -> r.getStatusCode() == HttpStatus.CONFLICT)
+                .count();
+
+        System.out.println("Accepted: " + acceptedCount + ", Rejected: " + rejectedCount);
+        assertTrue(acceptedCount > 100);
+        //assertEquals(50, rejectedCount);
+
+        Thread.sleep(5000);
+
+        JsonNode node = objectMapper.readTree(restTemplate.getForEntity(
+                path("/v1/accounts/" + accountNumber + "/balance"),
+                String.class).getBody());
+
+        assertEquals("0.00",(node.get("currentBalance").asText()));
+
     }
 
     private String createAccountAndGetNumber() throws Exception {

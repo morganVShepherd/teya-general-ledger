@@ -155,6 +155,23 @@ class TransactionServiceTest {
         assertEquals(1, response.transactions().size());
     }
 
+    @Test
+    void updateTransaction_balance_withdrawal() {
+        Account account = Account.builder()
+                .id(10L)
+                .accountNumber("ACC-00000001")
+                .currency("GBP")
+                .currentBalance(new BigDecimal("5"))
+                .build();
+
+
+        when(accountRepository.findById(10L)).thenReturn(Optional.of(account));
+        transactionService.processWithdrawal(buildTx(99L));
+
+
+
+    }
+
     private Transaction buildTx(Long id) {
         return Transaction.builder()
                 .id(id)

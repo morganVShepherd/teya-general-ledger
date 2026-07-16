@@ -10,6 +10,7 @@ import moo.interview.teya.repository.MessageQueueRepository;
 import moo.interview.teya.repository.TransactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,8 @@ import java.util.Optional;
 public class MessageQueueService {
 
     private static final Logger log = LoggerFactory.getLogger(MessageQueueService.class);
-    private static final int MAX_WITHDRAWAL_RETRIES = 3;
+    @Value("${teya.message-processor.max-retries:3}")
+    private int maxWithdrawalRetries;
 
     private final MessageQueueRepository messageQueueRepository;
     private final TransactionRepository transactionRepository;
@@ -121,8 +123,8 @@ public class MessageQueueService {
                 int nextAttempt = (msg.getRetryCount() == null ? 0 : msg.getRetryCount()) + 1;
                 msg.setRetryCount(nextAttempt);
 
-                if (nextAttempt >= MAX_WITHDRAWAL_RETRIES) {
-                    log.warn("Withdrawal transaction id={} failed: prior transactions still pending after {} retries", tx.getId(), MAX_WITHDRAWAL_RETRIES);
+                if (nextAttempt >= maxWithdrawalRetries) {
+                    log.warn("Withdrawal transaction id={} failed: prior transactions still pending after {} retries", tx.getId(), maxWithdrawalRetries);
                     tx.setStatus(TransactionStatus.FAILED);
                     transactionRepository.save(tx);
                     msg.setProcessed(true);
@@ -130,7 +132,7 @@ public class MessageQueueService {
                     messageQueueRepository.save(msg);
                     return;
                 } else {
-                    log.debug("Withdrawal transaction id={} waiting for prior transactions, retry={}/{}", tx.getId(), nextAttempt, MAX_WITHDRAWAL_RETRIES);
+                    log.debug("Withdrawal transaction id={} waiting for prior transactions, retry={}/{}", tx.getId(), nextAttempt, maxWithdrawalRetries);
                     messageQueueRepository.save(msg);
                     return;
                 }
@@ -146,6 +148,15 @@ public class MessageQueueService {
             newBalance = current.add(amount);
         } else if (tx.getTransactionType() == TransactionType.WITHDRAWAL) {
             newBalance = current.subtract(amount);
+            if(newBalance.compareTo(BigDecimal.ZERO) < 0) {
+                log.warn("Withdrawal transaction id={} failed: insufficient funds. Current balance={}, withdrawal amount={}", tx.getId(), current, amount);
+                tx.setStatus(TransactionStatus.FAILED);
+                transactionRepository.save(tx);
+                msg.setProcessed(true);
+                msg.setProcessedAtInUTC(Instant.now());
+                messageQueueRepository.save(msg);
+                return;
+            }
         }
 
         // Update transaction

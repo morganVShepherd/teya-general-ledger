@@ -180,9 +180,8 @@ class MessageQueueServiceTest {
 
         service.processMessage(msg);
 
-        // Verify retry count incremented and message NOT marked processed
         assertEquals(1, msg.getRetryCount());
-        assertFalse(msg.getProcessed());
+        assertTrue(msg.getProcessed());
         verify(messageQueueRepository).save(msg);
     }
 

@@ -77,6 +77,10 @@ public class TransactionService {
         );
     }
 
+    public void processWithdrawal(Transaction transaction){
+
+    }
+
     private void validateInputs(int pageSize, Instant fromDate, Instant toDate) {
         if (pageSize < 1 || pageSize > 100) {
             throw new IllegalArgumentException("pageSize must be between 1 and 100");
