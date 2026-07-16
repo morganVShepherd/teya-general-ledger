@@ -2,11 +2,13 @@ package moo.interview.teya.service;
 
 import moo.interview.teya.entity.Account;
 import moo.interview.teya.entity.MessageQueue;
+import moo.interview.teya.entity.OverdraftPolicy;
 import moo.interview.teya.entity.Transaction;
 import moo.interview.teya.entity.enums.TransactionStatus;
 import moo.interview.teya.entity.enums.TransactionType;
 import moo.interview.teya.repository.AccountRepository;
 import moo.interview.teya.repository.MessageQueueRepository;
+import moo.interview.teya.repository.OverdraftPolicyRepository;
 import moo.interview.teya.repository.TransactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,15 +36,18 @@ public class MessageQueueService {
     private final MessageQueueRepository messageQueueRepository;
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
+    private final OverdraftPolicyRepository overdraftPolicyRepository;
 
     private final Object lock = new Object();
 
     public MessageQueueService(MessageQueueRepository messageQueueRepository,
                                TransactionRepository transactionRepository,
-                               AccountRepository accountRepository) {
+                               AccountRepository accountRepository,
+                               OverdraftPolicyRepository overdraftPolicyRepository) {
         this.messageQueueRepository = messageQueueRepository;
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
+        this.overdraftPolicyRepository = overdraftPolicyRepository;
     }
 
     /**
@@ -148,14 +153,16 @@ public class MessageQueueService {
             newBalance = current.add(amount);
         } else if (tx.getTransactionType() == TransactionType.WITHDRAWAL) {
             newBalance = current.subtract(amount);
-            if(newBalance.compareTo(BigDecimal.ZERO) < 0) {
-                log.warn("Withdrawal transaction id={} failed: insufficient funds. Current balance={}, withdrawal amount={}", tx.getId(), current, amount);
-                tx.setStatus(TransactionStatus.FAILED);
-                transactionRepository.save(tx);
-                msg.setProcessed(true);
-                msg.setProcessedAtInUTC(Instant.now());
-                messageQueueRepository.save(msg);
-                return;
+            if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+                if (doesNotHaveValidOverdraft(acct.getId(), newBalance)) {
+                    log.warn("Withdrawal transaction id={} failed: insufficient funds. Current balance={}, withdrawal amount={}", tx.getId(), current, amount);
+                    tx.setStatus(TransactionStatus.FAILED);
+                    transactionRepository.save(tx);
+                    msg.setProcessed(true);
+                    msg.setProcessedAtInUTC(Instant.now());
+                    messageQueueRepository.save(msg);
+                    return;
+                }
             }
         }
 
@@ -183,5 +190,13 @@ public class MessageQueueService {
     public void processNow(MessageQueue msg) {
         processMessage(msg);
     }
+
+    //simulating checking if they have an overdraft
+    private boolean doesNotHaveValidOverdraft(Long accountId, BigDecimal newBalance) {
+        OverdraftPolicy overdraftPolicy = overdraftPolicyRepository.findByAccountId(accountId).orElse(null);
+        return overdraftPolicy == null || !overdraftPolicy.getOverdraftAllowed() || (newBalance.add(overdraftPolicy.getOverdraftLimit()).compareTo(BigDecimal.ZERO) < 0);
+
+    }
+
 }
 

@@ -2,12 +2,14 @@ package moo.interview.teya.service;
 
 import moo.interview.teya.entity.Account;
 import moo.interview.teya.entity.MessageQueue;
+import moo.interview.teya.entity.OverdraftPolicy;
 import moo.interview.teya.entity.Transaction;
 import moo.interview.teya.entity.enums.EventType;
 import moo.interview.teya.entity.enums.TransactionStatus;
 import moo.interview.teya.entity.enums.TransactionType;
 import moo.interview.teya.repository.AccountRepository;
 import moo.interview.teya.repository.MessageQueueRepository;
+import moo.interview.teya.repository.OverdraftPolicyRepository;
 import moo.interview.teya.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,13 +35,15 @@ class MessageQueueServiceTest {
     private TransactionRepository transactionRepository;
     @Mock
     private AccountRepository accountRepository;
+    @Mock
+    private OverdraftPolicyRepository overdraftPolicyRepository;
 
     private MessageQueueService service;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        service = new MessageQueueService(messageQueueRepository, transactionRepository, accountRepository);
+        service = new MessageQueueService(messageQueueRepository, transactionRepository, accountRepository,overdraftPolicyRepository);
     }
 
     @Test
@@ -246,5 +250,199 @@ class MessageQueueServiceTest {
         assertTrue(msg.getProcessed());
         assertNotNull(msg.getProcessedAtInUTC());
     }
+
+    @Test
+    void processMessage_insufficientFunds_marksMessageProcessed_no_overdraft() {
+        long ACCOUNT_ID = 10l;
+
+        Account acct = Account.builder()
+                .id(ACCOUNT_ID)
+                .accountNumber("ACC-00000001")
+                .currentBalance(new BigDecimal("5.0"))
+                .currency("GBP")
+                .createdAtInUTC(Instant.now())
+                .updatedAtInUTC(Instant.now())
+                .build();
+
+        Instant now = Instant.now();
+
+        Transaction withdrawal = Transaction.builder()
+                .id(200L)
+                .accountId(ACCOUNT_ID)
+                .transactionType(TransactionType.WITHDRAWAL)
+                .amount(new BigDecimal("50.000000"))
+                .status(TransactionStatus.PENDING)
+                .currency("GBP")
+                .createdAtInUTC(now)
+                .build();
+
+        MessageQueue msg = MessageQueue.builder()
+                .id(4L)
+                .transactionId(200L)
+                .accountNumber("ACC-00000001")
+                .eventType(EventType.TRANSACTION_COMPLETED)
+                .payload("{}")
+                .processed(false)
+                .retryCount(0)
+                .createdAtInUTC(now)
+                .build();
+
+        OverdraftPolicy overdraftPolicy = new OverdraftPolicy(
+                1L,
+                ACCOUNT_ID,
+                false, // overdraft not allowed
+                null,
+                Instant.now(),
+                Instant.now()
+        );
+
+        when(transactionRepository.findById(200L)).thenReturn(Optional.of(withdrawal));
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(acct));
+        when(transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(ACCOUNT_ID, TransactionStatus.PENDING))
+                .thenReturn(List.of(withdrawal));
+        when(transactionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(messageQueueRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(overdraftPolicyRepository.findByAccountId(ACCOUNT_ID)).thenReturn(Optional.of(overdraftPolicy));
+
+        service.processMessage(msg);
+
+        // Verify withdrawal marked as FAILED
+        ArgumentCaptor<Transaction> txCaptor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(txCaptor.capture());
+        assertEquals(TransactionStatus.FAILED, txCaptor.getValue().getStatus());
+
+        // Message marked as processed
+        assertTrue(msg.getProcessed());
+        assertNotNull(msg.getProcessedAtInUTC());
+    }
+
+    @Test
+    void processMessage_insufficientFunds_marksMessageProcessed_valid_overdraft() {
+        long ACCOUNT_ID = 10l;
+
+        Account acct = Account.builder()
+                .id(ACCOUNT_ID)
+                .accountNumber("ACC-00000001")
+                .currentBalance(new BigDecimal("5.0"))
+                .currency("GBP")
+                .createdAtInUTC(Instant.now())
+                .updatedAtInUTC(Instant.now())
+                .build();
+
+        Instant now = Instant.now();
+
+        Transaction withdrawal = Transaction.builder()
+                .id(200L)
+                .accountId(ACCOUNT_ID)
+                .transactionType(TransactionType.WITHDRAWAL)
+                .amount(new BigDecimal("50.000000"))
+                .status(TransactionStatus.PENDING)
+                .currency("GBP")
+                .createdAtInUTC(now)
+                .build();
+
+        MessageQueue msg = MessageQueue.builder()
+                .id(4L)
+                .transactionId(200L)
+                .accountNumber("ACC-00000001")
+                .eventType(EventType.TRANSACTION_COMPLETED)
+                .payload("{}")
+                .processed(false)
+                .retryCount(0)
+                .createdAtInUTC(now)
+                .build();
+
+        OverdraftPolicy overdraftPolicy = new OverdraftPolicy(
+                1L,
+                ACCOUNT_ID,
+                true,
+                new BigDecimal("100.0"),
+                Instant.now(),
+                Instant.now()
+        );
+
+        when(transactionRepository.findById(200L)).thenReturn(Optional.of(withdrawal));
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(acct));
+        when(transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(ACCOUNT_ID, TransactionStatus.PENDING))
+                .thenReturn(List.of(withdrawal));
+        when(transactionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(messageQueueRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(overdraftPolicyRepository.findByAccountId(ACCOUNT_ID)).thenReturn(Optional.of(overdraftPolicy));
+
+        service.processMessage(msg);
+
+        ArgumentCaptor<Transaction> txCaptor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(txCaptor.capture());
+        assertEquals(TransactionStatus.COMPLETED, txCaptor.getValue().getStatus());
+
+        // Message marked as processed
+        assertTrue(msg.getProcessed());
+        assertNotNull(msg.getProcessedAtInUTC());
+    }
+
+    @Test
+    void processMessage_insufficientFunds_marksMessageProcessed_insufficientOverdraft() {
+        long ACCOUNT_ID = 10l;
+
+        Account acct = Account.builder()
+                .id(ACCOUNT_ID)
+                .accountNumber("ACC-00000001")
+                .currentBalance(new BigDecimal("5.0"))
+                .currency("GBP")
+                .createdAtInUTC(Instant.now())
+                .updatedAtInUTC(Instant.now())
+                .build();
+
+        Instant now = Instant.now();
+
+        Transaction withdrawal = Transaction.builder()
+                .id(200L)
+                .accountId(ACCOUNT_ID)
+                .transactionType(TransactionType.WITHDRAWAL)
+                .amount(new BigDecimal("50.000000"))
+                .status(TransactionStatus.PENDING)
+                .currency("GBP")
+                .createdAtInUTC(now)
+                .build();
+
+        MessageQueue msg = MessageQueue.builder()
+                .id(4L)
+                .transactionId(200L)
+                .accountNumber("ACC-00000001")
+                .eventType(EventType.TRANSACTION_COMPLETED)
+                .payload("{}")
+                .processed(false)
+                .retryCount(0)
+                .createdAtInUTC(now)
+                .build();
+
+        OverdraftPolicy overdraftPolicy = new OverdraftPolicy(
+                1L,
+                ACCOUNT_ID,
+                true,
+                new BigDecimal("44.0"),
+                Instant.now(),
+                Instant.now()
+        );
+
+        when(transactionRepository.findById(200L)).thenReturn(Optional.of(withdrawal));
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(acct));
+        when(transactionRepository.findByAccountIdAndStatusOrderByCreatedAtInUTCAsc(ACCOUNT_ID, TransactionStatus.PENDING))
+                .thenReturn(List.of(withdrawal));
+        when(transactionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(messageQueueRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(overdraftPolicyRepository.findByAccountId(ACCOUNT_ID)).thenReturn(Optional.of(overdraftPolicy));
+
+        service.processMessage(msg);
+
+        ArgumentCaptor<Transaction> txCaptor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(txCaptor.capture());
+        assertEquals(TransactionStatus.FAILED, txCaptor.getValue().getStatus());
+
+        assertTrue(msg.getProcessed());
+        assertNotNull(msg.getProcessedAtInUTC());
+    }
+
+
 }
 
